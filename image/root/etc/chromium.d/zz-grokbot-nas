@@ -1,3 +1,0 @@
-# The container is the sandbox: Chromium's sandbox needs privileges the
-# container does not have. --test-type hides the "unsupported flag" banner.
-export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --no-sandbox --test-type --password-store=basic --ozone-platform-hint=auto"

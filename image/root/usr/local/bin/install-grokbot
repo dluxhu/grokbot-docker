@@ -5,148 +5,30 @@
 #   install-grokbot --check    exit 0: current, 10: update available, 11: not installed
 #   install-grokbot --remove   remove the app (your Grok Bot data stays)
 #
-# The package comes from the vendor's signed apt repository. apt checks the
-# repository signature and the package hash. The app goes into
-# ~/.local/opt/grok-bot/<version>, on the /config volume, so it survives image
-# updates. No root is needed.
+# Source: the vendor's signed apt repository. The app goes into
+# ~/.local/opt/grok-bot/<version>, on the /config volume. No root is needed.
 set -euo pipefail
 
-ROOT="${GROKBOT_HOME:-$HOME/.local/opt/grok-bot}"
-STATE="${XDG_CACHE_HOME:-$HOME/.cache}/grokbot-nas/apt"
-APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-KEY="${GROKBOT_KEY:-/usr/share/grokbot-nas/grok-bot.asc}"
-REPO=https://downloads.cursor.com/aptrepo
-LAUNCHER=/usr/local/bin/grok-bot
+APP_TITLE="Grok Bot"
+APP_PKG=grok-bot
+APP_ROOT="${GROKBOT_HOME:-$HOME/.local/opt/grok-bot}"
+APP_BIN=grok-bot
+APP_DATA="$HOME/.config/Grok Bot"
+REPO_URL=https://downloads.cursor.com/aptrepo
+REPO_SUITE=grok-bot
+REPO_COMPONENT=main
+REPO_KEY="${GROKBOT_KEY:-/usr/share/grokbot-nas/grok-bot.asc}"
 
-die() { echo "install-grokbot: $*" >&2; exit 1; }
+app_unpack() { mv "$1/opt/Grok Bot" "$2"; }
 
-# apt with private state in $STATE: only the Grok Bot repository, no root.
-apt_opts=(
-  -o Dir::Etc::SourceList=/dev/null
-  -o "Dir::Etc::SourceParts=$STATE/sources.d"
-  -o Dir::Etc::Preferences=/dev/null
-  -o "Dir::Etc::PreferencesParts=$STATE/empty"
-  -o "Dir::State::Lists=$STATE/lists"
-  -o "Dir::Cache=$STATE/cache"
-  -o "Dir::Cache::Archives=$STATE/cache/archives"
-  -o Dir::State::status=/dev/null
-  -o "APT::Sandbox::User=$(id -un 2>/dev/null || id -u)"
-  -o Debug::NoLocking=1
-)
-# apt reads this file first. It skips the system apt.conf.d hooks, which
-# write to /var.
-export APT_CONFIG="$STATE/apt.conf"
-
-prepare_apt() {
-  [ -r "$KEY" ] || die "missing signing key $KEY"
-  mkdir -p "$STATE/sources.d" "$STATE/empty" "$STATE/lists/partial" \
-           "$STATE/cache/archives/partial"
-  echo "Dir::Etc::Parts \"$STATE/empty\";" > "$APT_CONFIG"
-  cat > "$STATE/sources.d/grok-bot.sources" <<EOF
-Types: deb
-URIs: $REPO
-Suites: grok-bot
-Components: main
-Architectures: $(dpkg --print-architecture)
-Signed-By: $KEY
-EOF
+# Sign-in returns to the app through grokbot:// and sand:// links.
+app_register() {
+  ua_desktop_file "$1/usr/share/applications/grok-bot.desktop" \
+    /usr/local/bin/grok-bot "$APP_ROOT/current/resources/icon.png" set-scheme-defaults
 }
 
-latest_version() {
-  apt-get "${apt_opts[@]}" -qq update >&2 || return 1
-  apt-cache "${apt_opts[@]}" policy grok-bot | awk '/Candidate:/ {print $2}'
-}
+app_unregister() { rm -f "$APPS/grok-bot.desktop"; }
 
-installed_version() {
-  [ -L "$ROOT/current" ] && [ -x "$ROOT/current/grok-bot" ] || return 0
-  basename "$(readlink "$ROOT/current")"
-}
-
-register_desktop_file() {  # register_desktop_file <extracted package root>
-  local src="$1/usr/share/applications/grok-bot.desktop" dst="$APPS/grok-bot.desktop"
-  [ -f "$src" ] || die "the package has no grok-bot.desktop"
-  mkdir -p "$APPS"
-  sed -e "s|^Exec=.*|Exec=$LAUNCHER %U|" \
-      -e "s|^Icon=.*|Icon=$ROOT/current/resources/icon.png|" \
-      "$src" > "$dst"
-  # Sign-in returns to the app through these URL schemes (grokbot://, sand://).
-  local mime
-  mime="$(sed -n 's/^MimeType=//p' "$dst" | tr ';' ' ')"
-  for m in $mime; do
-    xdg-mime default grok-bot.desktop "$m" || echo "warning: cannot set the $m handler" >&2
-  done
-  update-desktop-database "$APPS" 2>/dev/null || true
-}
-
-prune_old_versions() {  # keep the current and the newest earlier version
-  local current keep=() d
-  current="$(installed_version)"
-  while IFS= read -r d; do
-    [ "$d" = "$current" ] && continue
-    keep+=("$d")
-  done < <(find "$ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*' -printf '%f\n' | sort -V -r)
-  for d in "${keep[@]:1}"; do rm -rf "${ROOT:?}/$d"; done
-}
-
-install_latest() {
-  local latest current tmp deb
-  latest="$(latest_version)" || die "cannot read the Grok Bot repository ($REPO)"
-  [[ "$latest" =~ ^[0-9][0-9A-Za-z.+~-]*$ ]] || die "unexpected version '$latest'"
-  current="$(installed_version)"
-  if [ "$current" = "$latest" ] && [ "${FORCE:-0}" != 1 ]; then
-    echo "Grok Bot $current is up to date."
-    return 0
-  fi
-  echo "Installing Grok Bot $latest${current:+ (was $current)} into $ROOT ..."
-
-  tmp="$(mktemp -d "$ROOT/.tmp.XXXXXX")"
-  trap 'rm -rf "$tmp"' EXIT
-  (cd "$tmp" && apt-get "${apt_opts[@]}" download "grok-bot=$latest")
-  deb="$(find "$tmp" -maxdepth 1 -name 'grok-bot_*.deb' -print -quit)"
-  [ -n "$deb" ] || die "download failed"
-  [ "$(dpkg-deb -f "$deb" Package)" = grok-bot ] || die "wrong package in $deb"
-  [ "$(dpkg-deb -f "$deb" Version)" = "$latest" ] || die "wrong version in $deb"
-
-  dpkg-deb -x "$deb" "$tmp/x"
-  [ -x "$tmp/x/opt/Grok Bot/grok-bot" ] || die "unexpected package layout"
-  rm -rf "${ROOT:?}/$latest"
-  mv "$tmp/x/opt/Grok Bot" "$ROOT/$latest"
-
-  # Switch with one rename, so a running Grok Bot never sees a half install.
-  ln -sfn "$latest" "$ROOT/.current.new"
-  mv -T "$ROOT/.current.new" "$ROOT/current"
-  register_desktop_file "$tmp/x"
-  rm -rf "$tmp"
-  trap - EXIT
-  prune_old_versions
-  echo "Grok Bot $latest is installed. Start it from the desktop menu or run: grok-bot"
-}
-
-remove_app() {
-  rm -rf "${ROOT:?}" "$APPS/grok-bot.desktop" "${STATE:?}"
-  echo "Grok Bot is removed. Its data in \"$HOME/.config/Grok Bot\" is kept."
-}
-
-case "${1:-}" in
-  "" | --force) [ "${1:-}" = --force ] && FORCE=1 ;;
-  --check | --remove) ;;
-  -h | --help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) die "unknown option '$1' (try --help)" ;;
-esac
-
-mkdir -p "$ROOT"
-exec 9> "$ROOT/.lock"
-flock -n 9 || die "another install-grokbot is running"
-
-case "${1:-}" in
-  --remove) remove_app ;;
-  --check)
-    prepare_apt
-    latest="$(latest_version)" || exit 1
-    current="$(installed_version)"
-    if [ -z "$current" ]; then echo "not installed (latest: $latest)"; exit 11; fi
-    if [ "$current" != "$latest" ]; then echo "update available: $current -> $latest"; exit 10; fi
-    echo "up to date: $current"
-    ;;
-  *) prepare_apt; install_latest ;;
-esac
+# shellcheck source=SCRIPTDIR/../lib/grokbot-nas/user-apt.sh
+. "$(dirname "$(readlink -f "$0")")/../lib/grokbot-nas/user-apt.sh"
+ua_main "$@"

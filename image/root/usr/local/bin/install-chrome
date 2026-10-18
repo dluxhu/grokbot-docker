@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Install or update Google Chrome into $HOME. Optional: without Chrome, links
+# show in a window and go to the clipboard (see grokbot-open-url).
+#
+#   install-chrome            install the newest version, or update to it
+#   install-chrome --check    exit 0: current, 10: update available, 11: not installed
+#   install-chrome --remove   remove Chrome (your Chrome profile stays)
+#
+# Source: Google's signed apt repository. Chrome goes into
+# ~/.local/opt/google-chrome/<version>, on the /config volume. No root is needed.
+set -euo pipefail
+
+APP_TITLE="Google Chrome"
+APP_PKG=google-chrome-stable
+APP_ROOT="${CHROME_HOME:-$HOME/.local/opt/google-chrome}"
+APP_BIN=google-chrome
+APP_DATA="$HOME/.config/google-chrome"
+REPO_URL=https://dl.google.com/linux/chrome/deb
+REPO_SUITE=stable
+REPO_COMPONENT=main
+REPO_KEY="${CHROME_KEY:-/usr/share/grokbot-nas/google-chrome.asc}"
+
+app_unpack() { mv "$1/opt/google/chrome" "$2"; }
+
+app_register() {
+  ua_desktop_file "$1/usr/share/applications/google-chrome.desktop" \
+    /usr/local/bin/google-chrome "$APP_ROOT/current/product_logo_256.png"
+}
+
+app_unregister() { rm -f "$APPS/google-chrome.desktop"; }
+
+# shellcheck source=SCRIPTDIR/../lib/grokbot-nas/user-apt.sh
+. "$(dirname "$(readlink -f "$0")")/../lib/grokbot-nas/user-apt.sh"
+ua_main "$@"

@@ -1,0 +1,37 @@
+#!/bin/bash
+# Default handler for web links (xdg-open and $BROWSER use it).
+# With Google Chrome installed: open the link in Chrome.
+# Without: show the link and put it on the clipboard, so you can open it in
+# the browser on your computer. Grok Bot sign-in works this way.
+# Always exit 0: a failed open makes the caller (for example Grok Bot sign-in)
+# give up.
+url="${1:-}"
+if [ -z "$url" ]; then
+  echo "usage: grokbot-open-url URL" >&2
+  exit 2
+fi
+
+if google-chrome --installed; then
+  setsid -f google-chrome "$url" > /dev/null 2>&1
+  exit 0
+fi
+
+# From a terminal (ttyd, ssh): print the link there.
+if [ -t 2 ]; then
+  echo "Open this link in a browser: $url" >&2
+  exit 0
+fi
+
+mkdir -p "$HOME/.cache/grokbot-nas"
+printf '%s\n' "$url" > "$HOME/.cache/grokbot-nas/last-url"
+if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+  printf '%s' "$url" | wl-copy > /dev/null 2>&1
+elif [ -n "${DISPLAY:-}" ]; then
+  printf '%s' "$url" | xclip -selection clipboard > /dev/null 2>&1
+fi
+
+# shellcheck disable=SC2016 # Expanded by the inner bash.
+setsid -f grokbot-terminal --hold "Open this link" bash -c \
+  'printf "Open this link in any browser. It is on the clipboard.\n\n%s\n" "$1"' _ "$url" \
+  > /dev/null 2>&1
+exit 0

@@ -11,6 +11,9 @@ Grok Build, Cursor Agent, Codex, Gemini and more.
 - **Grok Bot is not in the image.** `install-grokbot` installs the official package into your home
   folder from the vendor's signed apt repository. The desktop does this for you on first start.
   The app stays on the volume, so it survives image updates.
+- **Google Chrome is optional.** `install-chrome` installs it into your home folder the same way,
+  from Google's signed repository, and the desktop keeps it up to date. Without Chrome, web links
+  show in a window and go to the clipboard, so you open them in the browser on your computer.
 - **Agent CLIs are not in the image.** `install-agents` installs them into your home folder, as in
   [claude-syno-nas](https://github.com/dluxhu/claude-syno-nas).
 - **Optional terminal doors.** A web terminal (ttyd, `TTYD=1`) and key-only ssh (`SSHD=1`).
@@ -56,13 +59,34 @@ On first start, a terminal window installs Grok Bot (about 100 MB), then Grok Bo
 
 ## Sign in to Grok Bot
 
-1. In Grok Bot, choose **Sign in**. Chromium opens **inside the desktop**.
-2. Sign in to your Cursor account in that Chromium window.
-3. Chromium asks to open the `grokbot` link. Choose **Open**. Grok Bot receives the login.
+1. In Grok Bot, choose **Sign in**. A window shows the sign-in link, and the link is on the
+   clipboard.
+2. Open the link in the browser on your computer (or any device) and sign in to your Cursor
+   account.
+3. Grok Bot gets the login by itself after a few seconds. You have about 20 minutes.
 
-The sign-in must happen in the browser inside the container. The browser on your computer cannot
-send the `grokbot://` link back to the app in the container. The login is kept in
-`<home folder>/.config/Grok Bot`.
+This works because Grok Bot polls Cursor's server for the result. The browser does not have to
+reach the container. If the browser asks to open a `grokbot` link at the end, you can cancel it.
+
+With Google Chrome installed (`install-chrome`), the link opens in Chrome inside the desktop
+instead. Some connector logins (MCP OAuth) return to `localhost` in the container; these need
+Chrome in the container.
+
+The login is kept in `<home folder>/.config/Grok Bot`.
+
+## Google Chrome (optional)
+
+```
+install-chrome            # install the newest version, or update to it
+install-chrome --check    # show the installed and the newest version
+install-chrome --remove   # remove Chrome; your Chrome profile stays
+```
+
+The desktop menu has **Google Chrome** and **Install or update Chrome**. With
+`CHROME_AUTO_UPDATE=true` (the default), an installed Chrome updates on each container start.
+Chrome goes into `~/.local/opt/google-chrome/<version>` and its profile into
+`~/.config/google-chrome`. All web links (from Grok Bot, `gh`, agent CLIs) open in Chrome when it
+is installed.
 
 ## Install and update Grok Bot
 
@@ -81,7 +105,7 @@ an update.
 The installer uses apt with the vendor's repository (`https://downloads.cursor.com/aptrepo`) and
 its signing key, which is in the image. apt checks the signature and the package hash. Then the
 installer unpacks the package into `~/.local/opt/grok-bot/<version>`. It keeps the previous
-version. It does not need root.
+version. It does not need root. `install-chrome` works the same way with Google's repository.
 
 ## Install the agent CLIs
 
@@ -122,6 +146,7 @@ anything in it that you would not give to an agent.
 | Path in the home folder | What |
 |---|---|
 | `.local/opt/grok-bot/` | Grok Bot app versions |
+| `.local/opt/google-chrome/`, `.config/google-chrome/` | Chrome (optional) and its profile |
 | `.config/Grok Bot/` | Grok Bot data and login |
 | `.local/bin/`, `.npm-global/` | agent CLIs |
 | `.config/labwc/`, `.config/openbox/` | desktop autostart and menu (copied on first start only) |
@@ -138,6 +163,7 @@ All settings are in `.env`. See `.env.example` for each one.
 | `GUI_USER` / `GUI_PASS` | Login for the desktop. `GUI_PASS` is required. |
 | `GUI_HTTPS_PORT` / `GUI_HTTP_PORT` | Desktop ports (3001 HTTPS, 3000 HTTP for a reverse proxy). |
 | `GROKBOT_AUTO_UPDATE` | `true`: install and update Grok Bot at each start. |
+| `CHROME_AUTO_UPDATE` | `true`: update Chrome at each start, if it is installed. |
 | `PIXELFLUX_WAYLAND` | `true`: Wayland desktop. `false`: X11 desktop. |
 | `TTYD`, `TTYD_USER`, `TTYD_PASS`, `TTYD_PORT`, `TTYD_SHELL` | Web terminal. |
 | `SSHD`, `SSH_PORT` | Key-only ssh. |
@@ -165,7 +191,7 @@ directly to the internet; use the reverse proxy, a VPN or the firewall.
 - No Docker socket.
 
 This is less strict than claude-syno-nas: linuxserver images start as root to set up the user, so
-`cap_drop: ALL` is not possible. The `abc` user has `sudo` in the container. Chromium and Grok Bot
+`cap_drop: ALL` is not possible. The `abc` user has `sudo` in the container. Chrome and Grok Bot
 run with `--no-sandbox`, because their own sandbox needs privileges that the container does not
 have. The container is the sandbox.
 
@@ -185,8 +211,9 @@ Grok Bot and the agent CLIs are in the home folder, so an image update does not 
 - **Grok Bot does not open.** Open a terminal (right-click → Terminal) and run `grok-bot`. The
   error shows in the terminal.
 - **Grok Bot shows "Update required".** Run `install-grokbot`, then restart Grok Bot.
-- **Sign-in does not return to Grok Bot.** Sign in with the Chromium window inside the desktop,
-  and choose **Open** when it asks about the `grokbot` link.
+- **Sign-in does not finish.** Open the link from the "Open this link" window within about 20
+  minutes. The link is also in `<home folder>/.cache/grokbot-nas/last-url`. Each **Sign in** makes
+  a new link; use the newest one.
 - **A menu or autostart change in a new image has no effect.** The desktop copies them into the
   home folder on first start only. Delete `.config/labwc/` (or `.config/openbox/`) in the home
   folder and restart.
@@ -198,10 +225,14 @@ Grok Bot and the agent CLIs are in the home folder, so an image update does not 
 ```
 docker-compose.yml           the stack (pulls GHCR by default; --build builds ./image)
 .env.example                 settings
-image/Dockerfile             the image: Selkies desktop + Chromium + Grok Bot libraries + toolbox
+image/Dockerfile             the image: Selkies desktop + Grok Bot and Chrome libraries + toolbox
 image/root/                  files copied into the image
   usr/local/bin/install-grokbot   installs or updates Grok Bot into $HOME
   usr/local/bin/grok-bot          starts Grok Bot with container flags
+  usr/local/bin/install-chrome    installs or updates Google Chrome into $HOME (optional)
+  usr/local/bin/google-chrome     starts Chrome with container flags
+  usr/local/bin/grokbot-open-url  web-link handler: Chrome, or show and copy the link
+  usr/local/lib/grokbot-nas/      shared code of the two installers
   usr/local/bin/grokbot-session   desktop autostart: install or update, then start Grok Bot
   usr/local/bin/install-agents    installs the agent CLIs into $HOME
   etc/s6-overlay/s6-rc.d/         ttyd, sshd and startup-script services

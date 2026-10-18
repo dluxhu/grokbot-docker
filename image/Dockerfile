@@ -5,7 +5,8 @@
 #
 # Grok Bot is NOT in the image. `install-grokbot` installs the official package
 # into $HOME (/config) from the vendor's signed apt repository. The desktop
-# session runs it on first start. The agent CLIs (claude, grok, cursor, ...)
+# session runs it on first start. Google Chrome is optional: `install-chrome`
+# installs it the same way. The agent CLIs (claude, grok, cursor, ...)
 # are not in the image either: `install-agents` puts them into $HOME.
 
 ARG NODE_MAJOR=24
@@ -39,9 +40,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libgtk-3-0t64 libnotify4 libnss3 libxss1 libxtst6 xdg-utils \
       libatspi2.0-0t64 libuuid1 libsecret-1-0 libasound2t64 libgbm1 \
       libxkbcommon0 libdrm2 libayatana-appindicator3-1 desktop-file-utils \
-      # The sign-in flow opens a browser and returns through grokbot:// links,
-      # so the browser must run inside the container.
-      chromium \
+      # Libraries for the optional Google Chrome (install-chrome).
+      fonts-liberation libcups2t64 libvulkan1 \
+      # Clipboard tools: grokbot-open-url copies links when Chrome is absent.
+      wl-clipboard xclip \
       # Toolbox for the agents.
       git ca-certificates ripgrep curl jq bash fd-find less procps unzip zip \
       xz-utils sqlite3 tree file moreutils openssh-client openssh-server \
@@ -108,10 +110,14 @@ RUN tmux -V \
 ENV PIP_BREAK_SYSTEM_PACKAGES=1 \
     NPM_CONFIG_PREFIX=/config/.npm-global \
     PATH="/config/.local/bin:/config/.npm-global/bin:${PATH}" \
-    BROWSER=chromium
+    BROWSER=grokbot-open-url
 
 COPY root/ /
-RUN chmod +x /usr/local/bin/* /etc/s6-overlay/s6-rc.d/*/run
+RUN chmod +x /usr/local/bin/* /etc/s6-overlay/s6-rc.d/*/run \
+    # Google's signing key for install-chrome. Each image build gets the
+    # current key.
+    && curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+         -o /usr/share/grokbot-nas/google-chrome.asc
 
 # 3000 = desktop over HTTP (for a reverse proxy), 3001 = desktop over HTTPS,
 # 7681 = ttyd web terminal (TTYD=1), 2222 = sshd (SSHD=1).
