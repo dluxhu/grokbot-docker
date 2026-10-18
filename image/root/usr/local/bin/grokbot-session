@@ -1,13 +1,23 @@
 #!/bin/bash
-# Desktop autostart: install or update Grok Bot when needed, then start it.
-# GROKBOT_AUTO_UPDATE=false skips the install and the update check.
+# Desktop autostart: install or update Grok Bot (and Chrome, if installed)
+# when needed, then start Grok Bot.
+#   GROKBOT_AUTO_UPDATE=false  no Grok Bot install or update at start
+#   CHROME_AUTO_UPDATE=false   no Chrome update at start
 
+todo=()
 if [ "${GROKBOT_AUTO_UPDATE:-true}" = "true" ]; then
   install-grokbot --check > /dev/null 2>&1
-  case $? in
-    10 | 11) grokbot-terminal "Grok Bot setup" install-grokbot ;;
-    # Other codes: the repository is not reachable. Start what is installed.
-  esac
+  case $? in 10 | 11) todo+=(install-grokbot) ;; esac
+fi
+if [ "${CHROME_AUTO_UPDATE:-true}" = "true" ]; then
+  install-chrome --check > /dev/null 2>&1
+  [ $? -eq 10 ] && todo+=(install-chrome)
+fi
+# Other --check codes: the repository is not reachable. Use what is installed.
+
+if [ "${#todo[@]}" -gt 0 ]; then
+  # shellcheck disable=SC2016 # Expanded by the inner bash.
+  grokbot-terminal "Updates" bash -c 'rc=0; for c; do "$c" || rc=1; done; exit "$rc"' _ "${todo[@]}"
 fi
 
 if grok-bot --installed; then

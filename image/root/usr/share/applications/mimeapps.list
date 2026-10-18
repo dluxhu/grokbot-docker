@@ -1,6 +1,5 @@
 [Default Applications]
-x-scheme-handler/http=chromium.desktop
-x-scheme-handler/https=chromium.desktop
-text/html=chromium.desktop
+x-scheme-handler/http=grokbot-open-url.desktop
+x-scheme-handler/https=grokbot-open-url.desktop
 x-scheme-handler/grokbot=grok-bot.desktop
 x-scheme-handler/sand=grok-bot.desktop

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Open link
+Comment=Opens web links in Google Chrome, or shows them to copy
+Exec=/usr/local/bin/grokbot-open-url %u
+NoDisplay=true
+MimeType=x-scheme-handler/http;x-scheme-handler/https;

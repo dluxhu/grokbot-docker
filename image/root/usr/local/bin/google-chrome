@@ -1,0 +1,32 @@
+#!/bin/bash
+# Start Google Chrome (installed by install-chrome) with the flags it needs in
+# a container. Extra flags: CHROME_FLAGS.
+ROOT="${CHROME_HOME:-$HOME/.local/opt/google-chrome}"
+APP="$ROOT/current/google-chrome"
+
+if [ "${1:-}" = "--installed" ]; then
+  [ -x "$APP" ]
+  exit
+fi
+if [ ! -x "$APP" ]; then
+  msg='Google Chrome is not installed. Run: install-chrome'
+  if [ -t 2 ]; then echo "$msg" >&2; exit 1; fi
+  exec grokbot-terminal --hold "Google Chrome" bash -c "echo '$msg'"
+fi
+
+# A profile lock from an earlier container (another hostname) makes Chrome
+# refuse the profile, so remove the lock when no Chrome process runs.
+if ! pgrep -u "$(id -u)" -x chrome > /dev/null; then
+  rm -f "$HOME/.config/google-chrome/Singleton"*
+fi
+
+# The container is the sandbox: Chrome's sandbox needs privileges the
+# container does not have. --test-type hides the "unsupported flag" banner.
+flags=(--no-sandbox --test-type --password-store=basic --no-first-run --no-default-browser-check)
+if [ "${PIXELFLUX_WAYLAND,,}" = "true" ]; then
+  flags+=(--ozone-platform=wayland)
+fi
+# shellcheck disable=SC2206 # CHROME_FLAGS is a space-separated flag list.
+flags+=(${CHROME_FLAGS:-})
+
+exec "$APP" "${flags[@]}" "$@"

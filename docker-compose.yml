@@ -27,6 +27,8 @@ services:
       - PASSWORD=${GUI_PASS:?Set GUI_PASS in .env}
       # true: install Grok Bot on first start and update it on each start.
       - GROKBOT_AUTO_UPDATE=${GROKBOT_AUTO_UPDATE:-true}
+      # true: update Google Chrome on each start, if you installed it.
+      - CHROME_AUTO_UPDATE=${CHROME_AUTO_UPDATE:-true}
       # true: Wayland (labwc). false: X11 (Xvfb + Openbox).
       - PIXELFLUX_WAYLAND=${PIXELFLUX_WAYLAND:-true}
       # Optional terminal doors: TTYD=1 (web terminal), SSHD=1 (key-only ssh).
