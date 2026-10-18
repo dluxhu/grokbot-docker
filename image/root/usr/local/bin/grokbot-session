@@ -1,0 +1,17 @@
+#!/bin/bash
+# Desktop autostart: install or update Grok Bot when needed, then start it.
+# GROKBOT_AUTO_UPDATE=false skips the install and the update check.
+
+if [ "${GROKBOT_AUTO_UPDATE:-true}" = "true" ]; then
+  install-grokbot --check > /dev/null 2>&1
+  case $? in
+    10 | 11) grokbot-terminal "Grok Bot setup" install-grokbot ;;
+    # Other codes: the repository is not reachable. Start what is installed.
+  esac
+fi
+
+if grok-bot --installed; then
+  exec grok-bot
+fi
+exec grokbot-terminal "Grok Bot" bash -c \
+  'echo "Grok Bot is not installed. Run: install-grokbot"; echo; exec bash'

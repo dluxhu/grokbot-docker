@@ -1,0 +1,9 @@
+# Secrets
+.env
+
+# Local test data
+/.local-test
+/home
+
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

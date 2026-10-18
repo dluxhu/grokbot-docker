@@ -1,0 +1,14 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# Web terminal on :7681 when TTYD=1. Runs as abc, behind basic auth.
+if [ "${TTYD:-}" != "1" ]; then
+  exec sleep infinity
+fi
+if [ -z "${TTYD_USER:-}" ] || [ -z "${TTYD_PASS:-}" ]; then
+  echo "[svc-ttyd] TTYD=1 needs TTYD_USER and TTYD_PASS. The web terminal is not started." >&2
+  exec sleep infinity
+fi
+cd /config || exit 1
+echo "[svc-ttyd] ttyd on :7681, shell=${TTYD_SHELL:-bash}"
+exec s6-setuidgid abc ttyd --writable --port 7681 --cwd /config \
+  --credential "${TTYD_USER}:${TTYD_PASS}" "${TTYD_SHELL:-bash}"

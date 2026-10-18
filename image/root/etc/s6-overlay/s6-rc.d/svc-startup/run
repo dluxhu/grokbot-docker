@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# User hook: run /config/.config/startup.sh as abc on each container start.
+# Output goes to /config/.config/startup.log.
+SCRIPT=/config/.config/startup.sh
+LOG=/config/.config/startup.log
+if [ -f "${SCRIPT}" ]; then
+  echo "[svc-startup] running ${SCRIPT} (log: ${LOG})"
+  # shellcheck disable=SC2016 # Expanded by the inner bash.
+  cd /config && s6-setuidgid abc bash -c 'bash "$1" > "$2" 2>&1' _ "${SCRIPT}" "${LOG}"
+fi
+exec sleep infinity

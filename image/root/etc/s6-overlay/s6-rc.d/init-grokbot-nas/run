@@ -1,0 +1,9 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# Make the $HOME folders that PATH and npm use, owned by abc.
+for d in /config/.local/bin /config/.npm-global/bin /config/.config; do
+  if [ ! -d "$d" ]; then
+    mkdir -p "$d"
+    chown -R abc:abc "$d"
+  fi
+done

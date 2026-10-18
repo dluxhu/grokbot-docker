@@ -1,0 +1,40 @@
+#!/bin/bash
+# Start Grok Bot (installed by install-grokbot) with the flags it needs in a
+# container. Extra Electron flags: GROKBOT_FLAGS, or one flag per line in
+# ~/.config/grok-bot-flags.conf.
+ROOT="${GROKBOT_HOME:-$HOME/.local/opt/grok-bot}"
+APP="$ROOT/current/grok-bot"
+DATA="${SAND_USER_DATA_DIR:-$HOME/.config/Grok Bot}"
+
+if [ "${1:-}" = "--installed" ]; then
+  [ -x "$APP" ]
+  exit
+fi
+if [ ! -x "$APP" ]; then
+  echo "Grok Bot is not installed. Run: install-grokbot" >&2
+  exit 1
+fi
+
+# Grok Bot quits at start when it cannot get its single-instance lock. A lock
+# from an earlier container (another hostname) blocks it, so remove the lock
+# when no Grok Bot process runs.
+if ! pgrep -u "$(id -u)" -x grok-bot | grep -qvx "$$"; then
+  rm -f "$DATA/SingletonLock" "$DATA/SingletonSocket" "$DATA/SingletonCookie"
+fi
+
+# The container is the sandbox: Chromium's sandbox needs privileges the
+# container does not have.
+flags=(--no-sandbox --password-store=basic)
+if [ "${PIXELFLUX_WAYLAND,,}" = "true" ]; then
+  flags+=(--ozone-platform=wayland)
+fi
+conf="$HOME/.config/grok-bot-flags.conf"
+if [ -f "$conf" ]; then
+  while IFS= read -r line; do
+    case "$line" in "" | "#"*) ;; *) flags+=("$line") ;; esac
+  done < "$conf"
+fi
+# shellcheck disable=SC2206 # GROKBOT_FLAGS is a space-separated flag list.
+flags+=(${GROKBOT_FLAGS:-})
+
+exec "$APP" "${flags[@]}" "$@"

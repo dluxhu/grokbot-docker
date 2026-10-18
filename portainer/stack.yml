@@ -1,0 +1,44 @@
+# Portainer stack: pulls the prebuilt image from GHCR.
+# Portainer → Stacks → Add stack → name "grokbot" → paste this → set the
+# environment variables below → Deploy.
+#
+# Required: PUID, PGID, HOME_DIR, GUI_PASS
+# Optional: GUI_USER, TZ, GROKBOT_AUTO_UPDATE, PIXELFLUX_WAYLAND,
+#   TTYD, TTYD_USER, TTYD_PASS, TTYD_SHELL, SSHD, CLAUDE_CODE_OAUTH_TOKEN,
+#   GUI_HTTPS_PORT, GUI_HTTP_PORT, TTYD_PORT, SSH_PORT
+# See .env.example for what each one does.
+
+services:
+  grokbot:
+    image: ghcr.io/dluxhu/grokbot-docker:latest
+    container_name: ${CONTAINER_NAME:-grokbot}
+    hostname: ${CONTAINER_HOSTNAME:-grokbot}
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID:-1026}
+      - PGID=${PGID:-100}
+      - TZ=${TZ:-Etc/UTC}
+      - CUSTOM_USER=${GUI_USER:-abc}
+      - PASSWORD=${GUI_PASS:?Set GUI_PASS}
+      - GROKBOT_AUTO_UPDATE=${GROKBOT_AUTO_UPDATE:-true}
+      - PIXELFLUX_WAYLAND=${PIXELFLUX_WAYLAND:-true}
+      - TTYD=${TTYD:-}
+      - TTYD_USER=${TTYD_USER:-}
+      - TTYD_PASS=${TTYD_PASS:-}
+      - TTYD_SHELL=${TTYD_SHELL:-bash}
+      - SSHD=${SSHD:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    ports:
+      - "${GUI_HTTPS_PORT:-3001}:3001"
+      - "${GUI_HTTP_PORT:-3000}:3000"
+      - "${TTYD_PORT:-7681}:7681"
+      - "${SSH_PORT:-2222}:2222"
+    volumes:
+      - ${HOME_DIR:?Set HOME_DIR}:/config
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

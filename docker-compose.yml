@@ -1,0 +1,60 @@
+# Grok Bot desktop in the browser, plus agent CLIs. One container.
+# Deploy:  sudo docker compose up -d          (pulls the image from GHCR)
+#          sudo docker compose up -d --build  (builds ./image locally)
+name: grokbot-nas
+
+services:
+  grokbot:
+    image: ghcr.io/dluxhu/grokbot-docker:latest
+    build:
+      context: ./image
+      args:
+        EXTRA_PACKAGES: ${EXTRA_PACKAGES:-}
+    container_name: ${CONTAINER_NAME:-grokbot}
+    # A fixed hostname keeps the browser and app profiles valid across
+    # container re-creation.
+    hostname: ${CONTAINER_HOSTNAME:-grokbot}
+    restart: unless-stopped
+    environment:
+      # The container starts as root, then runs everything as user abc
+      # with this UID/GID. Files in HOME_DIR stay owned by your NAS user.
+      - PUID=${PUID:-1026}
+      - PGID=${PGID:-100}
+      - TZ=${TZ:-Etc/UTC}
+      # Login for the desktop (HTTP basic auth). It is a full desktop with a
+      # shell, so a password is required.
+      - CUSTOM_USER=${GUI_USER:-abc}
+      - PASSWORD=${GUI_PASS:?Set GUI_PASS in .env}
+      # true: install Grok Bot on first start and update it on each start.
+      - GROKBOT_AUTO_UPDATE=${GROKBOT_AUTO_UPDATE:-true}
+      # true: Wayland (labwc). false: X11 (Xvfb + Openbox).
+      - PIXELFLUX_WAYLAND=${PIXELFLUX_WAYLAND:-true}
+      # Optional terminal doors: TTYD=1 (web terminal), SSHD=1 (key-only ssh).
+      - TTYD=${TTYD:-}
+      - TTYD_USER=${TTYD_USER:-}
+      - TTYD_PASS=${TTYD_PASS:-}
+      - TTYD_SHELL=${TTYD_SHELL:-bash}
+      - SSHD=${SSHD:-}
+      # Optional: headless `claude -p` without a login.
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+    ports:
+      - "${GUI_HTTPS_PORT:-3001}:3001"
+      - "${GUI_HTTP_PORT:-3000}:3000"
+      - "${TTYD_PORT:-7681}:7681"
+      - "${SSH_PORT:-2222}:2222"
+    volumes:
+      # The only host folder the container sees. It is $HOME (/config):
+      # Grok Bot, the agent CLIs, their logins, ssh keys and your projects.
+      - ${HOME_DIR:?Set HOME_DIR in .env}:/config
+    # Chromium and Electron need a large /dev/shm.
+    shm_size: "1gb"
+    # Old kernels or seccomp profiles can block syscalls that the desktop
+    # needs. If the desktop does not start, enable this as a last resort:
+    # security_opt:
+    #   - seccomp=unconfined
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

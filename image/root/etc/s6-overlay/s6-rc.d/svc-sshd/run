@@ -1,0 +1,36 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# Key-only OpenSSH on :2222 when SSHD=1. Log in as user abc.
+if [ "${SSHD:-}" != "1" ]; then
+  exec sleep infinity
+fi
+SSH_DIR=/config/.ssh
+AUTH_KEYS="${SSH_DIR}/authorized_keys"
+HOST_KEY="${SSH_DIR}/ssh_host_ed25519_key"
+if [ ! -s "${AUTH_KEYS}" ]; then
+  echo "[svc-sshd] ${AUTH_KEYS} is missing or empty. sshd is not started." >&2
+  exec sleep infinity
+fi
+# The host key lives on the volume, so the host identity survives image updates.
+if [ ! -f "${HOST_KEY}" ]; then
+  s6-setuidgid abc ssh-keygen -q -t ed25519 -N '' -f "${HOST_KEY}"
+fi
+mkdir -p /run/sshd
+chmod 0755 /run/sshd
+# StrictModes no: Synology folders often have ACLs that sshd rejects. The
+# volume ownership is the boundary.
+cat > /run/sshd_config <<CONF
+Port 2222
+HostKey ${HOST_KEY}
+PidFile none
+UsePAM no
+AllowUsers abc
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+AuthorizedKeysFile ${AUTH_KEYS}
+StrictModes no
+Subsystem sftp internal-sftp
+CONF
+echo "[svc-sshd] sshd on :2222, user abc, keys ${AUTH_KEYS}"
+exec /usr/sbin/sshd -D -e -f /run/sshd_config
